@@ -216,14 +216,12 @@ impl Treasury {
                 exit_delay: info.unilateral_exit_delay as u32,
             })
             .collect();
-        // A fresh key for the batch's MuSig2 tree signing, so the payout key never enters one.
-        let mut tree_secret = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut tree_secret);
+        // The batch's MuSig2 tree is signed with a key `generate_delegate` draws fresh for each
+        // delegate, so the payout key never enters one.
         let (mut session, sighashes) = DelegateSettleSession::generate_delegate(
             &self.owner_pk_hex(),
             &info.signer_pubkey,
             &info.forfeit_pubkey,
-            &hex::encode(tree_secret),
             &inputs,
             &outputs,
             &info.forfeit_address,

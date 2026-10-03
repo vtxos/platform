@@ -48,7 +48,7 @@ pub const PREFLIGHT_REFUSAL: &str = r#"status is "PENDING", not "COMPLETED""#;
 /// - the deal has at least `min_left` seconds to run, since nothing is released after it ends.
 pub fn preflight_clears(
     reason: &str,
-    deal: Option<&cosigner::escrow_session::DealTerms>,
+    deal: Option<&cosigner::escrow::SealedTerms>,
     offered: &Policy,
     now: i64,
     min_left: i64,
@@ -336,10 +336,10 @@ mod tests {
     /// learned from the cosigner, never from the app.
     #[test]
     fn the_preflight_clears_only_the_offered_deal_with_time_to_run() {
-        use cosigner::escrow_session::DealTerms;
+        use cosigner::escrow::SealedTerms;
         let offered = policy_for(&alices_deal());
         let now = 1_800_000_000;
-        let sealed = |policy: &Policy, deadline: i64| DealTerms {
+        let sealed = |policy: &Policy, deadline: i64| SealedTerms {
             opened_at: now - 10,
             deadline,
             policy_sha256: cosigner::policy::policy_sha256(policy),

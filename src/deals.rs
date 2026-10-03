@@ -15,7 +15,6 @@ use tokio::sync::Mutex;
 /// What makes two requests the same payout.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Asked {
-    pub escrow_key: String,
     pub country: String,
     pub rail: String,
     /// The payee's account, by Grid's names for its fields.
@@ -169,7 +168,6 @@ mod tests {
 
     fn alices() -> Asked {
         Asked {
-            escrow_key: "02aa".into(),
             country: "NG".into(),
             rail: "bank".into(),
             fields: [("accountNumber", "0123456789"), ("bankName", "OPay")]
@@ -217,12 +215,12 @@ mod tests {
         assert_eq!((tag.as_str(), deal.quotes.len()), ("t1", 2));
         assert_eq!(reloaded.expiries().await["reimb-0001"], 2_000);
 
-        // The same tag for another escrow is refused: one payout cannot answer for two deals.
-        let bobs = Asked {
-            escrow_key: "02bb".into(),
+        // The same tag for another payout is refused: one payout cannot answer for two deals.
+        let more = Asked {
+            amount_minor: 4_000_000,
             ..alices()
         };
-        assert_eq!(reloaded.replay("t1", &bobs).await, Replay::Conflict);
+        assert_eq!(reloaded.replay("t1", &more).await, Replay::Conflict);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

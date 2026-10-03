@@ -335,9 +335,10 @@ async fn banks(State(app): State<Arc<App>>, Path(country): Path<String>) -> Resp
     }
 }
 
+/// A payout to price. Asked before the customer has an escrow for it: each payout is paid from an
+/// escrow of its own, minted only once the customer has seen the price — see [`fund`].
 #[derive(Deserialize)]
 struct PayoutRequest {
-    escrow_key: String,
     /// A corridor, and one of its rails — see `GET /corridors`.
     country: String,
     rail: String,
@@ -375,17 +376,8 @@ async fn quote(State(app): State<Arc<App>>, Json(ask): Json<PayoutRequest>) -> R
         Ok(found) => found,
         Err(why) => return fail(StatusCode::BAD_REQUEST, &why),
     };
-    let escrow_key = ask.escrow_key.to_ascii_lowercase();
-    if !app.wire.service.store.lock().await.shares.contains_key(&escrow_key) {
-        return fail(
-            StatusCode::BAD_REQUEST,
-            "this platform holds no share of that escrow, so it is not paired into it",
-        );
-    }
-
     let _quoting = app.quoting.lock().await;
     let asked = deals::Asked {
-        escrow_key: escrow_key.clone(),
         country: ask.country.clone(),
         rail: ask.rail.clone(),
         fields: ask.fields.clone(),
@@ -470,7 +462,8 @@ async fn quote(State(app): State<Arc<App>>, Json(ask): Json<PayoutRequest>) -> R
         request_id.clone(),
         Reimbursement {
             request_id: request_id.clone(),
-            escrow_key,
+            // Named when it is funded: the customer sets its escrow up after seeing this price.
+            escrow_key: String::new(),
             started_ref: quote.id.clone(),
             settled_ref: None,
             amount_minor: ask.amount_minor as u64, // positive, checked above
@@ -654,13 +647,16 @@ async fn escrow_lasts(app: &App, request_id: &str, now: u64) -> Result<(), Strin
 }
 
 /// The app has sealed the policy. Check this platform will be reimbursed, then pay.
+/// Which escrow pays for a payout: the one the customer set up for it, after the quote.
+#[derive(Deserialize)]
+struct FundRequest {
+    escrow_key: String,
+}
+
 async fn fund(
     State(app): State<Arc<App>>,
     Path(request_id): Path<String>,
-    // Read and dropped: `/fund` takes no body, but a client may send one anyway (`{}`, say). Left
-    // unread, it is still in the socket when the reply goes out, and closing a socket with unread
-    // bytes resets it — taking the reply with it. The payout is funded and the app never hears so.
-    _body: axum::body::Bytes,
+    Json(ask): Json<FundRequest>,
 ) -> Response {
     let now = unix_now();
     if !app.funding.lock().unwrap().insert(request_id.clone()) {
@@ -691,6 +687,9 @@ async fn fund(
     }
     if r.stage != Stage::EscrowActive {
         return fail(StatusCode::CONFLICT, "this payout has been funded already");
+    }
+    if let Err((status, why)) = bind_escrow(&app, &request_id, &ask.escrow_key).await {
+        return fail(status, &why);
     }
     let mut quote = match app.grid.quote_status(&r.started_ref).await {
         Ok(quote) => quote,
@@ -788,6 +787,62 @@ async fn fund(
         "transaction_id": quote.transaction_id,
     }))
     .into_response()
+}
+
+/// Name the escrow a payout is paid from, before anything is asked of it — see [`bind`] — and
+/// write that down.
+async fn bind_escrow(
+    app: &App,
+    request_id: &str,
+    escrow_key: &str,
+) -> Result<(), (StatusCode, String)> {
+    bind(&mut *app.wire.service.store.lock().await, request_id, escrow_key)?;
+    app.wire.service.persist().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("not funded: could not write down which escrow pays for it: {e}"),
+        )
+    })
+}
+
+/// Which escrow pays for [request_id]: [escrow_key], if it may.
+///
+/// One this platform is paired into — it holds a share of it — and one no other payout was ever
+/// paid from: an escrow holds one deal, sealed for one payout's deal tag, so a second payout named
+/// against it would be a second claim on one price. A payout named once keeps its escrow; asked
+/// again with another, it refuses rather than move.
+fn bind(
+    store: &mut escrow_service::Store,
+    request_id: &str,
+    escrow_key: &str,
+) -> Result<(), (StatusCode, String)> {
+    let escrow_key = escrow_key.to_ascii_lowercase();
+    if !store.shares.contains_key(&escrow_key) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "this platform holds no share of that escrow, so it is not paired into it".into(),
+        ));
+    }
+    let taken = store.reimbursements.values().any(|other| {
+        other.request_id != request_id && other.escrow_key.eq_ignore_ascii_case(&escrow_key)
+    });
+    if taken {
+        return Err((
+            StatusCode::CONFLICT,
+            "that escrow pays for another payout; each payout has an escrow of its own".into(),
+        ));
+    }
+    let Some(r) = store.reimbursements.get_mut(request_id) else {
+        return Err((StatusCode::NOT_FOUND, "no payout is tracked under that id".into()));
+    };
+    if !r.escrow_key.is_empty() && !r.escrow_key.eq_ignore_ascii_case(&escrow_key) {
+        return Err((
+            StatusCode::CONFLICT,
+            "this payout is paid from another escrow, named when it was first funded".into(),
+        ));
+    }
+    r.escrow_key = escrow_key;
+    Ok(())
 }
 
 /// Quote a deal again, its quote having expired unpaid: the same payee, amount and deal tag, under
@@ -918,10 +973,15 @@ async fn give_up(app: &Arc<App>, request_id: &str, why: &str) {
     let Some(offered) = deal.offered_policy() else {
         return;
     };
+    // Its escrow, if it was ever funded: one never named has no deal of this platform's on it.
+    let escrow_key = match app.wire.service.store.lock().await.reimbursements.get(request_id) {
+        Some(r) if !r.escrow_key.is_empty() => r.escrow_key.clone(),
+        _ => return,
+    };
     let (app, request_id) = (Arc::clone(app), request_id.to_string());
     tokio::spawn(async move {
         let hash = policy_sha256(&offered);
-        match reimburse::end_deal(&app.wire, &deal.asked.escrow_key, &hash).await {
+        match reimburse::end_deal(&app.wire, &escrow_key, &hash).await {
             Ok(()) => {
                 if let Err(e) = app.deals.ended(&tag).await {
                     tracing::warn!(%request_id, %e, "the deal ended, but that was not written down");
@@ -1062,6 +1122,45 @@ mod tests {
         assert!(lasts("the escrow's funds expire", now - 60, now, min)
             .unwrap_err()
             .starts_with("the escrow's funds expire in 0s"));
+    }
+
+    /// A payout is paid from an escrow this platform is paired into, that no other payout names,
+    /// and that it keeps once named.
+    #[test]
+    fn a_payout_is_paid_from_one_escrow_of_its_own() {
+        let share = |key: &str| {
+            json!({
+                "escrow_key": key, "attempt_id": "aa", "secret_share_hex": "01",
+                "public_key_package_json": "{}", "service_identifier_hex": "44",
+            })
+        };
+        let quoted = |id: &str| {
+            json!({
+                "request_id": id, "escrow_key": "", "started_ref": "Quote:1",
+                "amount_minor": 3_000_000, "currency": "NGN", "sats": 23_006,
+                "stage": "escrow-active",
+            })
+        };
+        let mut store: escrow_service::Store = serde_json::from_value(json!({
+            "shares": { "02aa": share("02aa"), "02bb": share("02bb") },
+            "reimbursements": { "reimb-1": quoted("reimb-1"), "reimb-2": quoted("reimb-2") },
+        }))
+        .expect("a store with two shares and two quoted payouts");
+        let refused = |r: Result<(), (StatusCode, String)>| r.unwrap_err().0;
+
+        assert_eq!(refused(bind(&mut store, "reimb-1", "02cc")), StatusCode::BAD_REQUEST);
+        bind(&mut store, "reimb-1", "02AA").expect("paired into it, and nobody else's");
+        assert_eq!(store.reimbursements["reimb-1"].escrow_key, "02aa");
+
+        // Another payout may not be paid from it — not even once this one is given up.
+        assert_eq!(refused(bind(&mut store, "reimb-2", "02aa")), StatusCode::CONFLICT);
+        store.reimbursements.get_mut("reimb-1").unwrap().given_up = true;
+        assert_eq!(refused(bind(&mut store, "reimb-2", "02aa")), StatusCode::CONFLICT);
+
+        // Named again, the same one is fine and another is refused.
+        bind(&mut store, "reimb-1", "02aa").expect("the same escrow again");
+        assert_eq!(refused(bind(&mut store, "reimb-1", "02bb")), StatusCode::CONFLICT);
+        bind(&mut store, "reimb-2", "02bb").expect("the other payout's own");
     }
 
     /// What the app is told, from the platform's stage and Grid's status.
