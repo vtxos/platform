@@ -70,7 +70,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 [[package]]
 name = "ark"
 version = "0.1.0"
-source = "git+https://github.com/vtxos/cosigner?tag=v0.1.0#12880e6d0e6e95b3925413271b3fbad5bd7441f4"
+source = "git+https://github.com/vtxos/cosigner?tag=v0.1.1#9a26d2491356f1d5ffbde3c6695247580e112445"
 dependencies = [
  "ark-core",
  "bitcoin",
@@ -499,7 +499,7 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 [[package]]
 name = "cosigner"
 version = "0.1.0"
-source = "git+https://github.com/vtxos/cosigner?tag=v0.1.0#12880e6d0e6e95b3925413271b3fbad5bd7441f4"
+source = "git+https://github.com/vtxos/cosigner?tag=v0.1.1#9a26d2491356f1d5ffbde3c6695247580e112445"
 dependencies = [
  "ark",
  "bitcoin",
@@ -650,7 +650,7 @@ dependencies = [
 [[package]]
 name = "enclave-client"
 version = "0.1.0"
-source = "git+https://github.com/vtxos/cosigner?tag=v0.1.0#12880e6d0e6e95b3925413271b3fbad5bd7441f4"
+source = "git+https://github.com/vtxos/cosigner?tag=v0.1.1#9a26d2491356f1d5ffbde3c6695247580e112445"
 dependencies = [
  "base64 0.22.1",
  "ciborium",
@@ -681,7 +681,7 @@ dependencies = [
 [[package]]
 name = "escrow-service"
 version = "0.1.0"
-source = "git+https://github.com/vtxos/cosigner?tag=v0.1.0#12880e6d0e6e95b3925413271b3fbad5bd7441f4"
+source = "git+https://github.com/vtxos/cosigner?tag=v0.1.1#9a26d2491356f1d5ffbde3c6695247580e112445"
 dependencies = [
  "anyhow",
  "ark",
@@ -2331,7 +2331,7 @@ dependencies = [
 [[package]]
 name = "threshold"
 version = "0.1.0"
-source = "git+https://github.com/vtxos/cosigner?tag=v0.1.0#12880e6d0e6e95b3925413271b3fbad5bd7441f4"
+source = "git+https://github.com/vtxos/cosigner?tag=v0.1.1#9a26d2491356f1d5ffbde3c6695247580e112445"
 dependencies = [
  "elliptic-curve",
  "hex-conservative",
