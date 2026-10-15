@@ -14,7 +14,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      # MerlinWallet's cosigner and ark crates generate protobuf code in their build scripts.
+      # The cosigner's and ark's build scripts generate protobuf code.
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: actions/cache@v4
@@ -26,7 +26,7 @@ jobs:
           key: rust-${{ hashFiles('Cargo.lock') }}
           restore-keys: rust-
       # --locked: the lockfile pins secp256k1 0.32.0-beta.2, which is yanked, so a fresh resolve
-      # would fail. It is also what makes the MerlinWallet commit here the one that is built.
+      # would fail. It is also what makes the cosigner release here the one that is built.
       - name: clippy
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: tests

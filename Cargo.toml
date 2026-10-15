@@ -6,14 +6,14 @@ publish = false
 description = "Send to a bank or mobile money: pays out through Lightspark Grid, then is reimbursed out of the customer's Merlin escrow."
 
 [dependencies]
-# MerlinWallet's crates, pinned to one commit: the escrow service, the cosigner's policy and wire
-# types, Ark and the threshold maths. Moving to a newer MerlinWallet is changing all four `rev`s.
-# The lockfile was seeded from MerlinWallet's: ark-core pins secp256k1 0.32.0-beta.2, which is
-# yanked, so a fresh resolve fails.
-escrow-service = { git = "https://github.com/BitspendPayment/MerlinWallet", rev = "cd54ae9e63c3b3e6a5e62db80a87ef136fcf921a" }
-cosigner = { git = "https://github.com/BitspendPayment/MerlinWallet", rev = "cd54ae9e63c3b3e6a5e62db80a87ef136fcf921a" }
-ark = { git = "https://github.com/BitspendPayment/MerlinWallet", rev = "cd54ae9e63c3b3e6a5e62db80a87ef136fcf921a", features = ["signing", "client"] }
-threshold = { git = "https://github.com/BitspendPayment/MerlinWallet", rev = "cd54ae9e63c3b3e6a5e62db80a87ef136fcf921a", features = ["std"] }
+# vtxos/cosigner's crates, pinned to one release: the escrow service, the cosigner's policy and wire
+# types, Ark and the threshold maths. Moving to a newer cosigner is changing all four `tag`s, to the
+# release infra's pins.env ships. The lockfile was seeded from the cosigner's: ark-core pins
+# secp256k1 0.32.0-beta.2, which is yanked, so a fresh resolve fails.
+escrow-service = { git = "https://github.com/vtxos/cosigner", tag = "v0.1.0" }
+cosigner = { git = "https://github.com/vtxos/cosigner", tag = "v0.1.0" }
+ark = { git = "https://github.com/vtxos/cosigner", tag = "v0.1.0", features = ["signing", "client"] }
+threshold = { git = "https://github.com/vtxos/cosigner", tag = "v0.1.0", features = ["std"] }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
 axum = "0.8"
