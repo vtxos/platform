@@ -8,11 +8,11 @@ has fetched the payout and the payee's account from Grid itself and found exactl
 sealed: the money arrived, at the account they typed, for this deal.
 
 It is MerlinWallet's `examples/card-escrow` with a Grid payout where the card purchase was, and it
-shares its escrow machinery through MerlinWallet's `crates/escrow-service`.
+shares its escrow machinery through [vtxos/cosigner](https://github.com/vtxos/cosigner)'s `crates/escrow-service`.
 
 ## Running it
 
-It builds on its own: MerlinWallet's crates come from GitHub, pinned to one commit in `Cargo.toml`.
+It builds on its own: the cosigner's crates come from GitHub, pinned to one release in `Cargo.toml`.
 Running it end to end also needs a MerlinWallet checkout next to this one (`../MerlinWallet`, for
 the regtest stack and the wallet side) and two Grid **sandbox** tokens from app.lightspark.com:
 
@@ -22,7 +22,7 @@ the regtest stack and the wallet side) and two Grid **sandbox** tokens from app.
 | `GRID_VIEW_ID` / `GRID_VIEW_SECRET` | VIEW only | the enclave, to check them — it lands in the image, so never a TRANSACT token |
 
 On regtest none of that is needed: MerlinWallet's stack runs this platform against the fake Grid
-below, built from this checkout against MerlinWallet's own crates.
+below, built from this checkout against the cosigner release the wallet runs (its `third_party/cosigner`).
 
 ```bash
 cd ../MerlinWallet
